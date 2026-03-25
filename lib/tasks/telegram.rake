@@ -1,5 +1,6 @@
 namespace :telegram do
   desc "Send a Telegram notification after deploy with commit info"
+  # ADD "bin/rails telegram:deploy_notify" to your post deploy scripts.
   task deploy_notify: :environment do
     require "net/http"
     require "json"
@@ -18,13 +19,19 @@ namespace :telegram do
     http.use_ssl = true
     headers = {"Authorization" => "Bearer #{github_token}", "Accept" => "application/vnd.github+json"}
 
-    # Get the latest push activity to detect branch and commit
+    # Get the latest push activity to detect branch
     activity_request = Net::HTTP::Get.new("/repos/#{repo}/activity?activity_type=push&direction=desc&per_page=1", headers)
     activity_response = http.request(activity_request)
     activity = JSON.parse(activity_response.body).first
 
     branch = activity["ref"].sub("refs/heads/", "")
-    commit_sha = activity["after"]
+
+    # Get the current commit on the branch (activity log can lag behind on amended commits)
+    ref_request = Net::HTTP::Get.new("/repos/#{repo}/git/refs/heads/#{branch}", headers)
+    ref_response = http.request(ref_request)
+    ref_data = JSON.parse(ref_response.body)
+
+    commit_sha = ref_data["object"]["sha"]
     commit_short = commit_sha[0, 7]
 
     # Get commit details for the message
